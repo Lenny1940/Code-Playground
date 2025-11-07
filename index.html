@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Playground 4.0</title>
+
+<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet"/>
+
+<style>
+:root {
+  --primary: #0077ff;
+  --bg: #f5f5f5;
+  --text: #222;
+  --editor-bg: #fff;
+  --preview-bg: #fff;
+}
+body.dark {
+  --primary: #00aaff;
+  --bg: #121212;
+  --text: #eee;
+  --editor-bg: #1e1e1e;
+  --preview-bg: #1a1a1a;
+}
+
+body {
+  margin:0;
+  font-family:'Poppins', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  transition: all 0.3s;
+  overflow:hidden;
+}
+
+header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px 20px;
+  background: var(--primary);
+  color:#fff;
+}
+header h1{margin:0;font-size:1.5rem;}
+.theme-toggle{
+  background:#fff;
+  color:var(--primary);
+  border:none;
+  padding:6px 10px;
+  border-radius:5px;
+  cursor:pointer;
+  font-weight:bold;
+}
+.theme-toggle:hover { transform: scale(1.05); }
+
+.container{
+  display:flex;
+  height:calc(100vh - 60px);
+  width:100%;
+}
+
+.editor-pane{
+  width:50%;
+  display:flex;
+  flex-direction:column;
+  border-right:5px solid #ccc;
+  position:relative;
+  overflow:hidden;
+}
+
+.resizer{
+  width:5px;
+  cursor:col-resize;
+  background:#ccc;
+}
+
+.tabs{
+  display:flex;
+}
+.tabs button{
+  flex:1;
+  padding:10px;
+  border:none;
+  cursor:pointer;
+  background:#eee;
+  color:#333;
+  font-weight:bold;
+  transition:0.3s;
+  border-radius:5px 5px 0 0;
+}
+.tabs button.active{ background: var(--primary); color:#fff; }
+
+.editor {
+  flex:1;
+  position:relative;
+  background: var(--editor-bg);
+  overflow:auto;
+  font-family: 'Fira Code', monospace;
+  font-size:1rem;
+  padding:10px;
+  outline:none;
+}
+
+.editor-buttons {
+  display:flex;
+  gap:10px;
+  padding:5px;
+}
+
+.editor-buttons button {
+  padding:5px 10px;
+  border:none;
+  border-radius:5px;
+  cursor:pointer;
+  background: var(--primary);
+  color:#fff;
+  font-weight:bold;
+  transition:0.2s;
+}
+.editor-buttons button:hover{ transform: scale(1.05); }
+
+.preview-pane{
+  flex:1;
+  background: var(--preview-bg);
+  overflow:hidden;
+}
+
+iframe{
+  width:100%;
+  height:100%;
+  border:none;
+  background:#fff;
+}
+
+.autocomplete {
+  position:absolute;
+  background: #fff;
+  border:1px solid #ccc;
+  max-height:150px;
+  overflow-y:auto;
+  font-family: 'Fira Code', monospace;
+  z-index:100;
+  display:none;
+}
+.autocomplete div{
+  padding:3px 6px;
+  cursor:pointer;
+}
+.autocomplete div:hover{ background: var(--primary); color:#fff; }
+
+@media(max-width:800px){
+  .container{ flex-direction:column; }
+  .editor-pane,.preview-pane{ width:100%; height:50%; }
+  .resizer{ display:none; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Code Playground 4.0</h1>
+  <button class="theme-toggle" onclick="toggleTheme()">🌙/☀️</button>
+</header>
+
+<div class="container">
+  <div class="editor-pane" id="editorPane">
+    <div class="tabs">
+      <button class="active" onclick="showEditor('html')">HTML</button>
+      <button onclick="showEditor('css')">CSS</button>
+      <button onclick="showEditor('js')">JS</button>
+    </div>
+
+    <div id="html" class="editor" contenteditable="true"></div>
+    <div id="css" class="editor" contenteditable="true" style="display:none"></div>
+    <div id="js" class="editor" contenteditable="true" style="display:none"></div>
+
+    <div class="editor-buttons">
+      <button onclick="runCode()">▶ Run</button>
+      <button onclick="copyCode()">📋 Copy</button>
+      <button onclick="loadTemplate()">✨ Hello World</button>
+    </div>
+  </div>
+
+  <div class="resizer" id="resizer"></div>
+
+  <div class="preview-pane">
+    <iframe id="preview"></iframe>
+  </div>
+</div>
+
+<div id="autocomplete" class="autocomplete"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+
+<script>
+let currentEditor = 'html';
+const htmlTags = ['<div>','<h1>','<h2>','<p>','<span>','<a>','<ul>','<li>','<img>','<button>','<input>'];
+const cssProps = ['color','background','margin','padding','font-size','display','border','border-radius','width','height'];
+const jsFuncs = ['console.log','alert','prompt','document.getElementById','document.querySelector','fetch','setTimeout','setInterval'];
+
+function showEditor(type){
+  currentEditor=type;
+  document.querySelectorAll('.editor').forEach(e=>e.style.display='none');
+  document.getElementById(type).style.display='block';
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+function runCode(){
+  const html = document.getElementById('html').innerText;
+  const css = document.getElementById('css').innerText;
+  const js = document.getElementById('js').innerText;
+  const preview = document.getElementById('preview');
+  preview.srcdoc = `<html><head><style>${css}</style></head><body>${html}<script>${js}<\/script></body></html>`;
+}
+
+function copyCode(){
+  const code = document.getElementById(currentEditor).innerText;
+  navigator.clipboard.writeText(code);
+  alert(currentEditor.toUpperCase() + " Code kopiert!");
+}
+
+function loadTemplate(){
+  document.getElementById('html').innerText = `<h1>Hello World!</h1>`;
+  document.getElementById('css').innerText = `h1 { color: #0077ff; text-align:center; }`;
+  document.getElementById('js').innerText = `console.log('Hello World');`;
+  runCode();
+  saveCode();
+}
+
+// Auto-Save
+function saveCode(){
+  ['html','css','js'].forEach(id=>{
+    localStorage.setItem(id, document.getElementById(id).innerText);
+  });
+}
+function loadCode(){
+  ['html','css','js'].forEach(id=>{
+    const val = localStorage.getItem(id);
+    if(val) document.getElementById(id).innerText = val;
+  });
+}
+
+// Autocomplete
+const autocompleteDiv = document.getElementById('autocomplete');
+function showAutocomplete(editor, words){
+  const sel = window.getSelection();
+  const text = sel.anchorNode ? sel.anchorNode.textContent : '';
+  const lastWord = text.split(/\s/).pop();
+  autocompleteDiv.innerHTML = '';
+  if(!lastWord) { autocompleteDiv.style.display='none'; return; }
+  const matches = words.filter(w=>w.startsWith(lastWord));
+  if(matches.length){
+    matches.forEach(m=>{
+      const div = document.createElement('div');
+      div.innerText = m;
+      div.onclick = ()=> {
+        const newText = text.replace(/(\S+)$/,'') + m + ' ';
+        sel.anchorNode.textContent = newText;
+        autocompleteDiv.style.display='none';
+        editor.focus();
+      };
+      autocompleteDiv.appendChild(div);
+    });
+    const rect = editor.getBoundingClientRect();
+    autocompleteDiv.style.display='block';
+    autocompleteDiv.style.top = (window.scrollY + editor.offsetTop + editor.scrollTop) + 'px';
+    autocompleteDiv.style.left = (window.scrollX + editor.offsetLeft + 10) + 'px';
+  } else autocompleteDiv.style.display='none';
+}
+
+['html','css','js'].forEach(id=>{
+  const editor = document.getElementById(id);
+  editor.addEventListener('input', ()=>{
+    Prism.highlightAll();
+    saveCode();
+    if(id==='html') showAutocomplete(editor, htmlTags);
+    if(id==='css') showAutocomplete(editor, cssProps);
+    if(id==='js') showAutocomplete(editor, jsFuncs);
+  });
+});
+
+// Dark/Light Mode
+function toggleTheme(){
+  document.body.classList.toggle('dark');
+  localStorage.setItem('theme', document.body.classList.contains('dark')?'dark':'light');
+}
+if(localStorage.getItem('theme')==='dark') document.body.classList.add('dark');
+
+// Load saved code on start
+loadCode();
+runCode();
+
+// Resizer
+const resizer = document.getElementById('resizer');
+const leftPane = document.getElementById('editorPane');
+let isResizing = false;
+
+resizer.addEventListener('mousedown', e=>{
+  isResizing = true;
+  document.body.style.cursor = 'col-resize';
+});
+
+document.addEventListener('mousemove', e=>{
+  if(!isResizing) return;
+  const newWidth = e.clientX;
+  if(newWidth < 200 || newWidth > window.innerWidth - 200) return;
+  leftPane.style.width = newWidth + 'px';
+});
+
+document.addEventListener('mouseup', e=>{
+  if(isResizing) document.body.style.cursor = 'default';
+  isResizing = false;
+});
+</script>
+
+</body>
+</html>
